@@ -1,0 +1,22 @@
+Name:          hsbot
+Version:       0.0.1
+License:       BSD3
+License-file:  LICENSE
+Author:        Daniel Trstenjak
+Maintainer:    daniel.trstenjak@gmail.com
+Build-Type:    Simple
+Category:      Game
+Cabal-Version: >=1.6
+Synopsis:      Program your robot AI in Haskell and try to win!
+Description:   Program your robot AI in Haskell and try to win!
+
+source-repository head
+  type:     git
+  location: https://github.com/dan-t/hsbot
+
+Executable hsbot
+  Main-is:       Main.hs
+  ghc-options:   -funbox-strict-fields -pgmPcpphs -optP--cpp
+  extensions:    CPP
+  Build-Depends: base >= 3 && < 5, vector, Vec, GLFW-b, OpenGLRaw, Gamgine, data-lens
+  Include-dirs:  ../Gamgine
