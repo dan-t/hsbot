@@ -24,6 +24,13 @@ type GridColumn = Vec.Vector GridField
 type Grid       = Vec.Vector GridColumn
 
 
+mkGrid :: Int -> Int -> Grid
+mkGrid width height =
+   Vec.generate width $ \x ->
+      Vec.generate height $ \y ->
+         GridField Nothing
+
+
 validCoord :: GridCoord -> Grid -> Bool
 validCoord (x:.y:.()) grid =
    x >= 0 
@@ -34,7 +41,7 @@ validCoord (x:.y:.()) grid =
 
 getGridField :: GridCoord -> Grid -> GridField
 getGridField c@(x:.y:.()) grid
-   | validCoord c grid = (grid ! y) ! x
+   | validCoord c grid = (grid ! x) ! y
    | otherwise         = 
       error $ P.printf "Invalid gridCoord=%s for gridWidth=%d and gridHeight=%d" (show c) (gridWidth grid) (gridHeight grid)
 
@@ -42,19 +49,17 @@ getGridField c@(x:.y:.()) grid
 setGridField :: GridCoord -> Grid -> GridField -> Grid
 setGridField c@(x:.y:.()) grid field
    | validCoord c grid =
-        let column  = grid ! y
-            column' = column // [(x, field)]
-            in grid // [(y, column')] 
+        let column  = grid ! x
+            column' = Vec.unsafeUpd column [(y, field)]
+            grid'   = Vec.unsafeUpd grid [(x, column')]
+            in grid'
 
    | otherwise =
       error $ P.printf "Invalid gridCoord=%s for gridWidth=%d and gridHeight=%d" (show c) (gridWidth grid) (gridHeight grid)
 
 
-
-
-
-
-
+placeRobot :: GridCoord -> Grid -> R.Robot -> Grid
+placeRobot coord grid robot = setGridField coord grid (GridField $ Just robot)
 
 
 gridWidth :: Grid -> Int
@@ -67,43 +72,22 @@ gridHeight grid
    | otherwise           = 0 
 
 
-mkGrid :: Int -> Int -> Grid
-mkGrid width height =
-   Vec.generate width $ \x ->
-      Vec.generate height $ \y ->
-         GridField Nothing
-
-
---placeRobot :: Grid -> GridCoord -> Robot -> Maybe Grid
---placeRobot grid (x:.y:.()) robot
---     let gfield = (grid ! y) ! x
---
---
---
---   | otherwise = Nothing
---
-
-
 renderGrid :: Grid -> IO ()
 renderGrid grid = do
    GL.glColor3f <<< ((1,1,1) :: Gfx.RGB)
 
    -- render columns
-   CM.forM_ [0 .. width - 1] $ \column ->
+   CM.forM_ [0 .. width] $ \column ->
       Gfx.withPrimitive GL.gl_LINE_STRIP $
-         CM.forM_ [0 .. height - 1] $ \row ->
+         CM.forM_ [0 .. height] $ \row ->
             GL.glVertex3f (fromIntegral column) (fromIntegral row) 0
 
    -- render rows
-   CM.forM_ [0 .. height - 1] $ \row ->
+   CM.forM_ [0 .. height] $ \row ->
       Gfx.withPrimitive GL.gl_LINE_STRIP $
-         CM.forM_ [0 .. width - 1] $ \column ->
+         CM.forM_ [0 .. width] $ \column ->
             GL.glVertex3f (fromIntegral column) (fromIntegral row) 0
 
    where
       width  = gridWidth grid
       height = gridHeight grid
-
-
---renderRobot :: GridCoord -> Robot -> IO ()
---renderRobot (x:.y:.()) robot

@@ -13,6 +13,7 @@ import qualified Gamgine.Math.Utils as MU
 import Gamgine.Math.Vect
 import Gamgine.Gfx ((<<<))
 import qualified Grid as G
+import qualified Robot as R
 
 gridWidth   = 10 :: Int
 gridHeight  = 10 :: Int
@@ -21,7 +22,6 @@ dGridWidth  = fromIntegral gridWidth
 dGridHeight = fromIntegral gridHeight
 
 borderWidth = (max dGridWidth dGridHeight) / 8
-edgeLength  =  1 :: Double
 
 
 main :: IO ()
