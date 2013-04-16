@@ -1,8 +1,9 @@
 
 module Grid where
 #include "Gamgine/Utils.cpp"
-import qualified Control.Monad as CM
+import Control.Monad (when)
 import qualified Data.Vector as Vec
+import Data.Maybe (isJust, fromJust)
 import qualified Text.Printf as P
 import Data.Vector ((!))
 import qualified Data.Vec as V
@@ -17,6 +18,7 @@ IMPORT_LENS_AS_LE
 type GridCoord = V.Vec2 Int
 
 data GridField = GridField {
+   coord :: GridCoord,
    robot :: Maybe R.Robot
    } deriving (Show, Eq)
 
@@ -28,7 +30,7 @@ mkGrid :: Int -> Int -> Grid
 mkGrid width height =
    Vec.generate width $ \x ->
       Vec.generate height $ \y ->
-         GridField Nothing
+         GridField (x:.y:.()) Nothing
 
 
 validCoord :: GridCoord -> Grid -> Bool
@@ -37,6 +39,10 @@ validCoord (x:.y:.()) grid =
       && x < gridWidth grid
       && y >= 0
       && y < gridHeight grid
+
+
+toVec3d :: GridCoord -> V.Vec3 Double
+toVec3d (x:.y:.()) = (fromIntegral x :. fromIntegral y :. 0)
 
 
 getGridField :: GridCoord -> Grid -> GridField
@@ -50,7 +56,7 @@ setGridField :: GridCoord -> Grid -> GridField -> Grid
 setGridField c@(x:.y:.()) grid field
    | validCoord c grid =
         let column  = grid ! x
-            column' = Vec.unsafeUpd column [(y, field)]
+            column' = Vec.unsafeUpd column [(y, field {coord = c})]
             grid'   = Vec.unsafeUpd grid [(x, column')]
             in grid'
 
@@ -59,7 +65,7 @@ setGridField c@(x:.y:.()) grid field
 
 
 placeRobot :: GridCoord -> Grid -> R.Robot -> Grid
-placeRobot coord grid robot = setGridField coord grid (GridField $ Just robot)
+placeRobot coord grid robot = setGridField coord grid (GridField coord $ Just robot)
 
 
 gridWidth :: Grid -> Int
@@ -73,21 +79,27 @@ gridHeight grid
 
 
 renderGrid :: Grid -> IO ()
-renderGrid grid = do
-   GL.glColor3f <<< ((1,1,1) :: Gfx.RGB)
+renderGrid grid =
+   Vec.forM_ grid $ \column ->
+      Vec.forM_ column renderGridField
 
-   -- render columns
-   CM.forM_ [0 .. width] $ \column ->
-      Gfx.withPrimitive GL.gl_LINE_STRIP $
-         CM.forM_ [0 .. height] $ \row ->
-            GL.glVertex3f (fromIntegral column) (fromIntegral row) 0
 
-   -- render rows
-   CM.forM_ [0 .. height] $ \row ->
-      Gfx.withPrimitive GL.gl_LINE_STRIP $
-         CM.forM_ [0 .. width] $ \column ->
-            GL.glVertex3f (fromIntegral column) (fromIntegral row) 0
+renderGridField :: GridField -> IO ()
+renderGridField (GridField coord robot) = do
+   Gfx.withPolyMode GL.gl_LINE $ do
+      GL.glColor3f <<< ((1,1,1) :: Gfx.RGB)
+      let minCoord = toVec3d coord
+          maxCoord = minCoord + (1:.1:.0:.())
+      Gfx.drawQuad minCoord maxCoord
 
-   where
-      width  = gridWidth grid
-      height = gridHeight grid
+   case robot of
+        Just r -> renderRobot coord r
+        _      -> return ()
+
+
+renderRobot :: GridCoord -> R.Robot -> IO ()
+renderRobot coord (R.Robot _ color) = do
+   GL.glColor3f <<< color
+   let minCoord = toVec3d coord + (0.2:.0.2:.0:.())
+       maxCoord = minCoord + (0.6:.0.6:.0:.())
+   Gfx.drawQuad minCoord maxCoord
