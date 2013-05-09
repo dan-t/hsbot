@@ -27,10 +27,11 @@ borderWidth = (max dGridWidth dGridHeight) / 8
 main :: IO ()
 main = do
    initGLFW
-   let grid  = G.mkGrid gridWidth gridHeight
-       grid' = G.placeRobot (0:.0:.()) grid (R.Robot 1 (1, 0, 0))
+   let grid   = G.mkGrid gridWidth gridHeight
+       grid'  = G.placeRobot (0:.0:.()) grid (R.Robot 1 (1, 0, 0))
+       grid'' = G.placeRobot (5:.5:.()) grid' (R.Robot 2 (0, 1, 0))
 
-   appLoop grid'
+   appLoop grid''
 
 
 appLoop :: G.Grid -> IO ()
