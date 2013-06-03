@@ -1,6 +1,8 @@
+{-# LANGUAGE PatternGuards #-}
 
 module Grid where
 #include "Gamgine/Utils.cpp"
+import System.Random (randomRIO)
 import Control.Monad (when)
 import qualified Data.Vector as Vec
 import Data.Maybe (isJust, fromJust)
@@ -33,12 +35,46 @@ mkGrid width height =
          GridField (x:.y:.()) Nothing
 
 
+forM_ :: Grid -> (GridField -> IO ()) -> IO ()
+forM_ grid f = Vec.forM_ grid $ \column -> Vec.forM_ column f
+
+
+foldl' :: (a -> GridField -> a) -> a -> Grid -> a
+foldl' f a grid = Vec.foldl' (\a column -> Vec.foldl' f a column) a grid
+
+
+randomAndFreeCoord :: Grid -> IO GridCoord
+randomAndFreeCoord grid = do
+   x <- randomRIO (0, gridWidth grid - 1)
+   y <- randomRIO (0, gridHeight grid - 1)
+   let coord = x:.y:.()
+   case getGridField coord grid of
+        GridField _ Nothing -> return coord
+        _                   -> randomAndFreeCoord grid
+
+
 validCoord :: GridCoord -> Grid -> Bool
 validCoord (x:.y:.()) grid =
    x >= 0 
       && x < gridWidth grid
       && y >= 0
       && y < gridHeight grid
+
+
+constrainCoord :: GridCoord -> Grid -> GridCoord
+constrainCoord (x:.y:.()) grid = (x':.y':.())
+   where
+      x' = min (gridWidth grid - 1) (max 0 x)
+      y' = min (gridHeight grid - 1) (max 0 y)
+
+
+addDir :: GridCoord -> R.Direction -> GridCoord
+(x:.y:.()) `addDir` dir =
+  case dir of
+       R.PlusY  -> x:.(y + 1):.()
+       R.MinusY -> x:.(y - 1):.()
+       R.MinusX -> (x - 1):.y:.()
+       R.PlusX  -> (x + 1):.y:.()
 
 
 toVec3d :: GridCoord -> V.Vec3 Double
@@ -68,6 +104,12 @@ placeRobot :: GridCoord -> Grid -> R.Robot -> Grid
 placeRobot coord grid robot = setGridField coord grid (GridField coord $ Just robot)
 
 
+placeRobotRandomly :: Grid -> R.Robot -> IO Grid
+placeRobotRandomly grid robot = do
+   coord <- randomAndFreeCoord grid
+   return $ placeRobot coord grid robot
+
+
 gridWidth :: Grid -> Int
 gridWidth = Vec.length
 
@@ -79,9 +121,7 @@ gridHeight grid
 
 
 renderGrid :: Grid -> IO ()
-renderGrid grid =
-   Vec.forM_ grid $ \column ->
-      Vec.forM_ column renderGridField
+renderGrid grid = forM_ grid renderGridField
 
 
 renderGridField :: GridField -> IO ()
@@ -98,8 +138,28 @@ renderGridField (GridField coord robot) = do
 
 
 renderRobot :: GridCoord -> R.Robot -> IO ()
-renderRobot coord (R.Robot _ color) = do
+renderRobot coord (R.Robot {R.color = color}) = do
    GL.glColor3f <<< color
    let minCoord = toVec3d coord + (0.2:.0.2:.0:.())
        maxCoord = minCoord + (0.6:.0.6:.0:.())
    Gfx.drawQuad minCoord maxCoord
+
+
+robots :: Grid -> [R.Robot]
+robots grid = foldl' f [] grid
+   where
+      f robots (GridField _ (Just robot)) = robot : robots
+      f robots (GridField _            _) = robots
+
+
+type Actions       = [(R.Id, R.Action)]
+type ActionResults = [(R.Id, R.ActionResult)]
+
+
+executeRobots :: Grid -> ActionResults -> Actions
+executeRobots grid results = map f $ robots grid
+   where
+      f R.Robot {R.robotId = id, R.execute = exec} = (id, exec $ result id)
+
+      result id | Just res <- lookup id results = res
+                | otherwise                     = R.NoResult

@@ -2,7 +2,7 @@
 
 import System.Exit (exitSuccess)
 import qualified Debug.Trace as T
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>), (<*>))
 import qualified Data.Vector as Vec
 import qualified Graphics.UI.GLFW as GLFW
 import qualified Graphics.Rendering.OpenGL.Raw as GL
@@ -27,9 +27,9 @@ borderWidth = (max dGridWidth dGridHeight) / 8
 main :: IO ()
 main = do
    initGLFW
-   let grid   = G.mkGrid gridWidth gridHeight
-       grid'  = G.placeRobot (0:.0:.()) grid (R.Robot 1 (1, 0, 0))
-       grid'' = G.placeRobot (5:.5:.()) grid' (R.Robot 2 (0, 1, 0))
+   let grid = G.mkGrid gridWidth gridHeight
+   grid'  <- G.placeRobotRandomly grid  (R.defaultRobot 1 (1, 0, 0))
+   grid'' <- G.placeRobotRandomly grid' (R.defaultRobot 2 (0, 1, 0))
 
    appLoop grid''
 
