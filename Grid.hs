@@ -4,6 +4,7 @@ module Grid where
 #include "Gamgine/Utils.cpp"
 import System.Random (randomRIO)
 import Control.Monad (when)
+import qualified Data.List as L
 import qualified Data.Vector as Vec
 import Data.Maybe (isJust, fromJust)
 import qualified Text.Printf as P
@@ -24,6 +25,9 @@ data GridField = GridField {
    robot :: Maybe R.Robot
    } deriving (Show, Eq)
 
+LENS(coord)
+LENS(robot)
+
 type GridColumn = Vec.Vector GridField
 type Grid       = Vec.Vector GridColumn
 
@@ -41,6 +45,14 @@ forM_ grid f = Vec.forM_ grid $ \column -> Vec.forM_ column f
 
 foldl' :: (a -> GridField -> a) -> a -> Grid -> a
 foldl' f a grid = Vec.foldl' (\a column -> Vec.foldl' f a column) a grid
+
+
+find :: (GridField -> Bool) -> Grid -> [GridField]
+find f grid = foldl' g [] grid
+   where
+      g fields field
+         | f field   = field : fields
+         | otherwise = fields
 
 
 randomAndFreeCoord :: Grid -> IO GridCoord
@@ -100,8 +112,12 @@ setGridField c@(x:.y:.()) grid field
       error $ P.printf "Invalid gridCoord=%s for gridWidth=%d and gridHeight=%d" (show c) (gridWidth grid) (gridHeight grid)
 
 
+gridFieldL :: GridCoord -> LE.Lens Grid GridField
+gridFieldL coord = LE.lens (getGridField coord) (\field grid -> setGridField coord grid field)
+
+
 placeRobot :: GridCoord -> Grid -> R.Robot -> Grid
-placeRobot coord grid robot = setGridField coord grid (GridField coord $ Just robot)
+placeRobot coord grid robot = LE.setL (robotL . gridFieldL coord) (Just robot) grid
 
 
 placeRobotRandomly :: Grid -> R.Robot -> IO Grid
@@ -145,21 +161,31 @@ renderRobot coord (R.Robot {R.color = color}) = do
    Gfx.drawQuad minCoord maxCoord
 
 
-robots :: Grid -> [R.Robot]
+robots :: Grid -> [(GridCoord, R.Robot)]
 robots grid = foldl' f [] grid
    where
-      f robots (GridField _ (Just robot)) = robot : robots
-      f robots (GridField _            _) = robots
+      f robots (GridField coord (Just robot)) = (coord, robot) : robots
+      f robots (GridField _     _           ) = robots
 
 
 type Actions       = [(R.Id, R.Action)]
 type ActionResults = [(R.Id, R.ActionResult)]
 
 
-executeRobots :: Grid -> ActionResults -> Actions
-executeRobots grid results = map f $ robots grid
+executeRobots :: Grid -> ActionResults -> (Grid, Actions)
+executeRobots grid results = (grid', actions)
    where
-      f R.Robot {R.robotId = id, R.execute = exec} = (id, exec $ result id)
+      grid' = L.foldl' setRobot grid robotsAndActions
+         where
+            setRobot grid (coord, (robot, _)) = placeRobot coord grid robot
 
-      result id | Just res <- lookup id results = res
-                | otherwise                     = R.NoResult
+      actions = L.map collectAction robotsAndActions
+         where
+            collectAction (_, (R.Robot {R.robotId = id}, action)) = (id, action)
+
+      robotsAndActions = L.map execRobot (robots grid)
+         where
+            execRobot (coord, r@R.Robot {R.robotId = id, R.execute = exec}) = (coord, exec r (result id))
+
+            result id | Just res <- lookup id results = res
+                      | otherwise                     = R.NoResult

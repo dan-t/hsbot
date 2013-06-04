@@ -1,14 +1,20 @@
 
 module Robot where
+#include "Gamgine/Utils.cpp"
 import qualified Gamgine.Gfx as Gfx
+IMPORT_LENS_AS_LE
 
 type Id = Int
 
 data Robot = Robot {
    robotId :: Id,
    color   :: Gfx.RGB,
-   execute :: ActionResult -> Action
+   execute :: Robot -> ActionResult -> (Robot, Action)
    }
+
+LENS(robotId)
+LENS(color)
+LENS(execute)
 
 instance Show Robot where
    show (Robot id color _) = "defaultRobot" ++ show id ++ show color
@@ -20,9 +26,9 @@ instance Eq Robot where
 defaultRobot :: Id -> Gfx.RGB -> Robot
 defaultRobot id color = Robot id color exec
    where
-      exec NoResult          = Move PlusY
-      exec (Moved dir True ) = Move dir
-      exec (Moved dir False) = Move $ nextDir dir
+      exec robot NoResult          = (robot, Move PlusY)
+      exec robot (Moved dir True ) = (robot, Move dir)
+      exec robot (Moved dir False) = (robot, Move $ nextDir dir)
 
       nextDir PlusY  = PlusX
       nextDir PlusX  = MinusY
@@ -32,7 +38,9 @@ defaultRobot id color = Robot id color exec
 
 data Direction = PlusX | MinusX | PlusY | MinusY deriving (Show, Eq, Enum)
 
-data Action = Move Direction deriving (Show, Eq)
+data Action = Move Direction
+            | NoAction
+            deriving (Show, Eq)
 
 data ActionResult = Moved Direction Bool
                   | NoResult
