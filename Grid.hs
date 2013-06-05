@@ -14,6 +14,7 @@ import Data.Vec ((:.)(..))
 import qualified Graphics.Rendering.OpenGL.Raw as GL
 import qualified Gamgine.Gfx as Gfx
 import Gamgine.Gfx ((<<<))
+import Gamgine.Coroutine (Coroutine, runCoroutine)
 import qualified Robot as R
 IMPORT_LENS_AS_LE
 
@@ -175,17 +176,19 @@ type ActionResults = [(R.Id, R.ActionResult)]
 executeRobots :: Grid -> ActionResults -> (Grid, Actions)
 executeRobots grid results = (grid', actions)
    where
-      grid' = L.foldl' setRobot grid robotsAndActions
+      grid'             = L.foldl' setExec grid execs'
          where
-            setRobot grid (coord, (robot, _)) = placeRobot coord grid robot
+            setExec grid (coord, exec') = LE.modL (robotL . gridFieldL coord) (\robot ->
+               case robot of
+                    Just r -> Just r {R.execute = exec'}
+                    _      -> robot
+               ) grid
 
-      actions = L.map collectAction robotsAndActions
+      (execs', actions) = L.unzip $ L.map execRobot (robots grid)
          where
-            collectAction (_, (R.Robot {R.robotId = id}, action)) = (id, action)
+            execRobot (coord, R.Robot {R.robotId = id, R.execute = exec}) =
+               let (action, exec') = runCoroutine exec (result id)
+                   in ((coord, exec'), (id, action))
 
-      robotsAndActions = L.map execRobot (robots grid)
-         where
-            execRobot (coord, r@R.Robot {R.robotId = id, R.execute = exec}) = (coord, exec r (result id))
-
-            result id | Just res <- lookup id results = res
-                      | otherwise                     = R.NoResult
+      result id | Just res <- lookup id results = res
+                | otherwise                     = R.NoResult

@@ -2,6 +2,7 @@
 module Robot where
 #include "Gamgine/Utils.cpp"
 import qualified Gamgine.Gfx as Gfx
+import Gamgine.Coroutine (Coroutine(..))
 IMPORT_LENS_AS_LE
 
 type Id = Int
@@ -9,7 +10,7 @@ type Id = Int
 data Robot = Robot {
    robotId :: Id,
    color   :: Gfx.RGB,
-   execute :: Robot -> ActionResult -> (Robot, Action)
+   execute :: Coroutine ActionResult Action
    }
 
 LENS(robotId)
@@ -24,11 +25,11 @@ instance Eq Robot where
 
 
 defaultRobot :: Id -> Gfx.RGB -> Robot
-defaultRobot id color = Robot id color exec
+defaultRobot id color = Robot id color (Coroutine exec)
    where
-      exec robot NoResult          = (robot, Move PlusY)
-      exec robot (Moved dir True ) = (robot, Move dir)
-      exec robot (Moved dir False) = (robot, Move $ nextDir dir)
+      exec NoResult          = (Move PlusY, Coroutine exec)
+      exec (Moved dir True ) = (Move dir, Coroutine exec)
+      exec (Moved dir False) = (Move $ nextDir dir, Coroutine exec)
 
       nextDir PlusY  = PlusX
       nextDir PlusX  = MinusY
