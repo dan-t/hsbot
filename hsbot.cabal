@@ -18,5 +18,5 @@ Executable hsbot
   Main-is:       Main.hs
   ghc-options:   -funbox-strict-fields -pgmPcpphs -optP--cpp
   extensions:    CPP
-  Build-Depends: base >= 3 && < 5, vector, Vec, GLFW-b, OpenGLRaw, Gamgine, data-lens, random
+  Build-Depends: base >= 3 && < 5, vector, Vec, GLFW-b < 1.0.0, OpenGLRaw, Gamgine, data-lens, random, mtl
   Include-dirs:  ../Gamgine

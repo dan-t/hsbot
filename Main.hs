@@ -3,6 +3,7 @@
 import System.Exit (exitSuccess)
 import qualified Debug.Trace as T
 import Control.Applicative ((<$>), (<*>))
+import qualified Control.Monad.State as ST
 import qualified Data.Vector as Vec
 import qualified Graphics.UI.GLFW as GLFW
 import qualified Graphics.Rendering.OpenGL.Raw as GL
@@ -14,6 +15,7 @@ import Gamgine.Math.Vect
 import Gamgine.Gfx ((<<<))
 import qualified Grid as G
 import qualified Robot as R
+import HsBot
 
 gridWidth   = 10 :: Int
 gridHeight  = 10 :: Int
@@ -27,20 +29,31 @@ borderWidth = (max dGridWidth dGridHeight) / 8
 main :: IO ()
 main = do
    initGLFW
-   let grid = G.mkGrid gridWidth gridHeight
-   grid'  <- G.placeRobotRandomly grid  (R.defaultRobot 1 (1, 0, 0))
-   grid'' <- G.placeRobotRandomly grid' (R.defaultRobot 2 (0, 1, 0))
+   hsBot <- ST.execStateT placeRobots (mkHsBot gridWidth gridHeight)
+   ST.evalStateT appLoop hsBot
+   where
+      placeRobots = placeRobot1 >> placeRobot2
+      placeRobot1 = placeRobotRandomly (R.defaultRobot 1 (1, 0, 0))
+      placeRobot2 = placeRobotRandomly (R.defaultRobot 2 (0, 1, 0))
 
-   appLoop grid''
+
+appLoop :: HsBot ()
+appLoop = do
+   render
+   appLoop
 
 
-appLoop :: G.Grid -> IO ()
-appLoop grid = do
-   GL.glClearColor 0 0 0 0
-   GL.glClear (fromIntegral GL.gl_COLOR_BUFFER_BIT)
-   G.renderGrid grid
-   GLFW.swapBuffers
-   appLoop grid
+render :: HsBot ()
+render = do
+   clearScreen
+   renderHsBot
+   swapBuffers
+   where
+      swapBuffers = ST.liftIO GLFW.swapBuffers
+
+      clearScreen = ST.liftIO $ do
+         GL.glClearColor 0 0 0 0
+         GL.glClear (fromIntegral GL.gl_COLOR_BUFFER_BIT)
 
 
 initGLFW :: IO ()

@@ -117,16 +117,6 @@ gridFieldL :: GridCoord -> LE.Lens Grid GridField
 gridFieldL coord = LE.lens (getGridField coord) (\field grid -> setGridField coord grid field)
 
 
-placeRobot :: GridCoord -> Grid -> R.Robot -> Grid
-placeRobot coord grid robot = LE.setL (robotL . gridFieldL coord) (Just robot) grid
-
-
-placeRobotRandomly :: Grid -> R.Robot -> IO Grid
-placeRobotRandomly grid robot = do
-   coord <- randomAndFreeCoord grid
-   return $ placeRobot coord grid robot
-
-
 gridWidth :: Grid -> Int
 gridWidth = Vec.length
 
@@ -167,28 +157,3 @@ robots grid = foldl' f [] grid
    where
       f robots (GridField coord (Just robot)) = (coord, robot) : robots
       f robots (GridField _     _           ) = robots
-
-
-type Actions       = [(R.Id, R.Action)]
-type ActionResults = [(R.Id, R.ActionResult)]
-
-
-executeRobots :: Grid -> ActionResults -> (Grid, Actions)
-executeRobots grid results = (grid', actions)
-   where
-      grid'             = L.foldl' setExec grid execs'
-         where
-            setExec grid (coord, exec') = LE.modL (robotL . gridFieldL coord) (\robot ->
-               case robot of
-                    Just r -> Just r {R.execute = exec'}
-                    _      -> robot
-               ) grid
-
-      (execs', actions) = L.unzip $ L.map execRobot (robots grid)
-         where
-            execRobot (coord, R.Robot {R.robotId = id, R.execute = exec}) =
-               let (action, exec') = runCoroutine exec (result id)
-                   in ((coord, exec'), (id, action))
-
-      result id | Just res <- lookup id results = res
-                | otherwise                     = R.NoResult
