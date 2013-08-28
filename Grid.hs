@@ -103,20 +103,24 @@ toVec3d (x:.y:.()) = (fromIntegral x :. fromIntegral y :. 0)
 
 getGridField :: GridCoord -> Grid -> GridField
 getGridField c@(x:.y:.()) grid
-   | validCoord c grid = (grid ^. fields) ! (x * y)
+   | validCoord c grid = grid ^. fields . atIndex (x * y)
    | otherwise         = 
       error $ P.printf "Invalid gridCoord=%s for gridWidth=%d and gridHeight=%d" (show c) (grid ^. width) (grid ^. height)
 
 
 setGridField :: GridCoord -> Grid -> GridField -> Grid
 setGridField c@(x:.y:.()) grid field
-   | validCoord c grid = grid & fields %~ (// [(x * y, field)])
+   | validCoord c grid = grid & fields . atIndex (x * y) .~ field
    | otherwise =
       error $ P.printf "Invalid gridCoord=%s for gridWidth=%d and gridHeight=%d" (show c) (grid ^. width) (grid ^. height)
 
 
-gridField :: GridCoord -> Lens' Grid GridField
-gridField coord = lens (getGridField coord) (\grid field -> setGridField coord grid field)
+atCoord :: GridCoord -> Lens' Grid GridField
+atCoord coord = lens (getGridField coord) (\grid field -> setGridField coord grid field)
+
+
+atIndex :: Int -> Lens' GridFields GridField
+atIndex i = lens (! i) (\gfs gf -> gfs // [(i, gf)])
 
 
 renderGrid :: Grid -> IO ()

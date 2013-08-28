@@ -34,7 +34,7 @@ placeRobotRandomly robot = do
 
 placeRobot :: GridCoord -> Robot -> HsBot ()
 placeRobot coord rob =
-   grid . gridField coord . robot .= Just rob
+   grid . atCoord coord . robot .= Just rob
 
 
 type Actions       = [(R.Id, R.Action)]
