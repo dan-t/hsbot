@@ -8,7 +8,7 @@ import qualified Data.List as L
 import qualified Data.Vector as Vec
 import Data.Maybe (isJust, fromJust)
 import qualified Text.Printf as P
-import Data.Vector ((!))
+import Data.Vector ((!), (//))
 import qualified Data.Vec as V
 import Data.Vec ((:.)(..))
 import qualified Graphics.Rendering.OpenGL.Raw as GL
@@ -28,23 +28,31 @@ data GridField = GridField {
 
 makeLenses ''GridField
 
-type GridColumn = Vec.Vector GridField
-type Grid       = Vec.Vector GridColumn
+type GridFields = Vec.Vector GridField
+
+data Grid = Grid {
+   _width  :: Int,
+   _height :: Int,
+   _fields :: GridFields
+   } deriving (Show)
+
+makeLenses ''Grid
 
 
 mkGrid :: Int -> Int -> Grid
-mkGrid width height =
-   Vec.generate width $ \x ->
-      Vec.generate height $ \y ->
-         GridField (x:.y:.()) Nothing
+mkGrid width height = Grid width height mkFields
+   where
+      mkFields = Vec.generate (width * height) $ \i ->
+         let (x, y) = i `quotRem` width
+             in GridField (x:.y:.()) Nothing
 
 
 forM_ :: Grid -> (GridField -> IO ()) -> IO ()
-forM_ grid f = Vec.forM_ grid $ \column -> Vec.forM_ column f
+forM_ grid = Vec.forM_ $ grid ^. fields
 
 
 foldl' :: (a -> GridField -> a) -> a -> Grid -> a
-foldl' f a grid = Vec.foldl' (\a column -> Vec.foldl' f a column) a grid
+foldl' f a grid = Vec.foldl' f a $ grid ^. fields
 
 
 find :: (GridField -> Bool) -> Grid -> [GridField]
@@ -57,8 +65,8 @@ find f grid = foldl' g [] grid
 
 randomAndFreeCoord :: Grid -> IO GridCoord
 randomAndFreeCoord grid = do
-   x <- randomRIO (0, gridWidth grid - 1)
-   y <- randomRIO (0, gridHeight grid - 1)
+   x <- randomRIO (0, grid ^. width - 1)
+   y <- randomRIO (0, grid ^. height - 1)
    let coord = x:.y:.()
    case getGridField coord grid of
         GridField _ Nothing -> return coord
@@ -68,16 +76,16 @@ randomAndFreeCoord grid = do
 validCoord :: GridCoord -> Grid -> Bool
 validCoord (x:.y:.()) grid =
    x >= 0 
-      && x < gridWidth grid
+      && x < grid ^. width
       && y >= 0
-      && y < gridHeight grid
+      && y < grid ^. height
 
 
 constrainCoord :: GridCoord -> Grid -> GridCoord
 constrainCoord (x:.y:.()) grid = (x':.y':.())
    where
-      x' = min (gridWidth grid - 1) (max 0 x)
-      y' = min (gridHeight grid - 1) (max 0 y)
+      x' = min (grid ^. width - 1) (max 0 x)
+      y' = min (grid ^. height - 1) (max 0 y)
 
 
 addDir :: GridCoord -> Direction -> GridCoord
@@ -95,35 +103,20 @@ toVec3d (x:.y:.()) = (fromIntegral x :. fromIntegral y :. 0)
 
 getGridField :: GridCoord -> Grid -> GridField
 getGridField c@(x:.y:.()) grid
-   | validCoord c grid = (grid ! x) ! y
+   | validCoord c grid = (grid ^. fields) ! (x * y)
    | otherwise         = 
-      error $ P.printf "Invalid gridCoord=%s for gridWidth=%d and gridHeight=%d" (show c) (gridWidth grid) (gridHeight grid)
+      error $ P.printf "Invalid gridCoord=%s for gridWidth=%d and gridHeight=%d" (show c) (grid ^. width) (grid ^. height)
 
 
 setGridField :: GridCoord -> Grid -> GridField -> Grid
 setGridField c@(x:.y:.()) grid field
-   | validCoord c grid =
-        let column  = grid ! x
-            column' = Vec.unsafeUpd column [(y, field {_coord = c})]
-            grid'   = Vec.unsafeUpd grid [(x, column')]
-            in grid'
-
+   | validCoord c grid = grid & fields %~ (// [(x * y, field)])
    | otherwise =
-      error $ P.printf "Invalid gridCoord=%s for gridWidth=%d and gridHeight=%d" (show c) (gridWidth grid) (gridHeight grid)
+      error $ P.printf "Invalid gridCoord=%s for gridWidth=%d and gridHeight=%d" (show c) (grid ^. width) (grid ^. height)
 
 
 gridField :: GridCoord -> Lens' Grid GridField
 gridField coord = lens (getGridField coord) (\grid field -> setGridField coord grid field)
-
-
-gridWidth :: Grid -> Int
-gridWidth = Vec.length
-
-
-gridHeight :: Grid -> Int
-gridHeight grid
-   | not $ Vec.null grid = Vec.length $ Vec.head grid
-   | otherwise           = 0 
 
 
 renderGrid :: Grid -> IO ()
