@@ -1,9 +1,9 @@
-{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE PatternGuards, TemplateHaskell, Rank2Types #-}
 
 module Grid where
-#include "Gamgine/Utils.cpp"
 import System.Random (randomRIO)
 import Control.Monad (when)
+import Control.Lens
 import qualified Data.List as L
 import qualified Data.Vector as Vec
 import Data.Maybe (isJust, fromJust)
@@ -15,19 +15,18 @@ import qualified Graphics.Rendering.OpenGL.Raw as GL
 import qualified Gamgine.Gfx as Gfx
 import Gamgine.Gfx ((<<<))
 import Gamgine.Coroutine (Coroutine, runCoroutine)
+import Robot
 import qualified Robot as R
-IMPORT_LENS_AS_LE
 
 
 type GridCoord = V.Vec2 Int
 
 data GridField = GridField {
-   coord :: GridCoord,
-   robot :: Maybe R.Robot
+   _coord :: GridCoord,
+   _robot :: Maybe Robot
    } deriving (Show, Eq)
 
-LENS(coord)
-LENS(robot)
+makeLenses ''GridField
 
 type GridColumn = Vec.Vector GridField
 type Grid       = Vec.Vector GridColumn
@@ -81,7 +80,7 @@ constrainCoord (x:.y:.()) grid = (x':.y':.())
       y' = min (gridHeight grid - 1) (max 0 y)
 
 
-addDir :: GridCoord -> R.Direction -> GridCoord
+addDir :: GridCoord -> Direction -> GridCoord
 (x:.y:.()) `addDir` dir =
   case dir of
        R.PlusY  -> x:.(y + 1):.()
@@ -105,7 +104,7 @@ setGridField :: GridCoord -> Grid -> GridField -> Grid
 setGridField c@(x:.y:.()) grid field
    | validCoord c grid =
         let column  = grid ! x
-            column' = Vec.unsafeUpd column [(y, field {coord = c})]
+            column' = Vec.unsafeUpd column [(y, field {_coord = c})]
             grid'   = Vec.unsafeUpd grid [(x, column')]
             in grid'
 
@@ -113,8 +112,8 @@ setGridField c@(x:.y:.()) grid field
       error $ P.printf "Invalid gridCoord=%s for gridWidth=%d and gridHeight=%d" (show c) (gridWidth grid) (gridHeight grid)
 
 
-gridFieldL :: GridCoord -> LE.Lens Grid GridField
-gridFieldL coord = LE.lens (getGridField coord) (\field grid -> setGridField coord grid field)
+gridField :: GridCoord -> Lens' Grid GridField
+gridField coord = lens (getGridField coord) (\grid field -> setGridField coord grid field)
 
 
 gridWidth :: Grid -> Int
@@ -144,15 +143,15 @@ renderGridField (GridField coord robot) = do
         _      -> return ()
 
 
-renderRobot :: GridCoord -> R.Robot -> IO ()
-renderRobot coord (R.Robot {R.color = color}) = do
-   GL.glColor3f <<< color
+renderRobot :: GridCoord -> Robot -> IO ()
+renderRobot coord robot = do
+   GL.glColor3f <<< robot ^. color
    let minCoord = toVec3d coord + (0.2:.0.2:.0:.())
        maxCoord = minCoord + (0.6:.0.6:.0:.())
    Gfx.drawQuad minCoord maxCoord
 
 
-robots :: Grid -> [(GridCoord, R.Robot)]
+robots :: Grid -> [(GridCoord, Robot)]
 robots grid = foldl' f [] grid
    where
       f robots (GridField coord (Just robot)) = (coord, robot) : robots

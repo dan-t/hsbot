@@ -1,39 +1,40 @@
+{-# LANGUAGE TemplateHaskell #-}
 
 module HsBot where
-#include "Gamgine/Utils.cpp"
-IMPORT_LENS_AS_LE
-
+import Control.Lens
 import Control.Applicative ((<$>), (<*>))
 import qualified Control.Monad.State as ST
 import qualified Data.List as L
-import qualified Grid as G
+import Grid
+import Robot
 import qualified Robot as R
 import qualified Gamgine.Lens.State as LS
 import Gamgine.Coroutine (runCoroutine)
 
 
 data HsBotData = HsBotData {
-   grid :: G.Grid
+   _grid :: Grid
    } deriving Show
 
-LENS(grid)
+makeLenses ''HsBotData
 
 type HsBot = ST.StateT HsBotData IO
 
 
 mkHsBot :: Int -> Int -> HsBotData
-mkHsBot gridWidth gridHeight = HsBotData $ G.mkGrid gridWidth gridHeight
+mkHsBot gridWidth gridHeight = HsBotData $ mkGrid gridWidth gridHeight
 
 
-placeRobotRandomly :: R.Robot -> HsBot ()
+placeRobotRandomly :: Robot -> HsBot ()
 placeRobotRandomly robot = do
-   grid  <- LS.getL gridL
-   coord <- ST.liftIO $ G.randomAndFreeCoord grid
+   grid  <- use grid
+   coord <- ST.liftIO $ randomAndFreeCoord grid
    placeRobot coord robot
 
 
-placeRobot :: G.GridCoord -> R.Robot -> HsBot ()
-placeRobot coord robot = ST.modify $ LE.setL (G.robotL . G.gridFieldL coord . gridL) (Just robot)
+placeRobot :: GridCoord -> Robot -> HsBot ()
+placeRobot coord rob =
+   grid . gridField coord . robot .= Just rob
 
 
 type Actions       = [(R.Id, R.Action)]
@@ -63,5 +64,5 @@ type ActionResults = [(R.Id, R.ActionResult)]
 
 renderHsBot :: HsBot ()
 renderHsBot = do
-   grid <- LS.getL gridL
-   ST.liftIO $ G.renderGrid grid
+   grid <- use grid
+   ST.liftIO $ renderGrid grid
