@@ -4,6 +4,7 @@ module Grid where
 import System.Random (randomRIO)
 import Control.Monad (when)
 import Control.Lens
+import Control.Arrow ((&&&))
 import qualified Data.List as L
 import qualified Data.Vector as Vec
 import Data.Maybe (isJust, fromJust)
@@ -27,6 +28,11 @@ data GridField = GridField {
    } deriving (Show, Eq)
 
 makeLenses ''GridField
+
+
+justRobot :: Lens' GridField Robot
+justRobot = lens (^. robot . to fromJust) (\gf r -> gf & robot .~ Just r)
+
 
 type GridFields = Vec.Vector GridField
 
@@ -148,8 +154,16 @@ renderRobot coord robot = do
    Gfx.drawQuad minCoord maxCoord
 
 
-robots :: Grid -> [(GridCoord, Robot)]
-robots grid = foldl' f [] grid
+havingRobot :: Traversal' GridField GridField
+havingRobot = filtered (^. robot . to isJust)
+
+
+robotWithId :: Id -> Traversal' GridField GridField
+robotWithId id = filtered $ withId id
    where
-      f robots (GridField coord (Just robot)) = (coord, robot) : robots
-      f robots (GridField _     _           ) = robots
+      withId id (GridField _ (Just robot)) = id == robot ^. robotId
+      withId _                           _ = False
+
+
+robots :: Grid -> [(GridCoord, Robot)]
+robots grid = grid ^.. fields . traversed . havingRobot . to ((^. coord) &&& (^. justRobot))
