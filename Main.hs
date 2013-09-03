@@ -29,21 +29,18 @@ borderWidth = (max dGridWidth dGridHeight) / 8
 main :: IO ()
 main = do
    initGLFW
-   hsBot <- ST.execStateT placeRobots (mkHsBot gridWidth gridHeight)
+   hsBot <- mkDefaultHsBot gridWidth gridHeight
    ST.evalStateT appLoop hsBot
-   where
-      placeRobots = placeRobot1 >> placeRobot2
-      placeRobot1 = placeRobotRandomly (R.defaultRobot 1 (1, 0, 0))
-      placeRobot2 = placeRobotRandomly (R.defaultRobot 2 (0, 1, 0))
 
 
-appLoop :: HsBot ()
+appLoop :: HsBotST ()
 appLoop = do
+   executeRobots
    render
    appLoop
 
 
-render :: HsBot ()
+render :: HsBotST ()
 render = do
    clearScreen
    renderHsBot

@@ -1,13 +1,13 @@
-{-# LANGUAGE PatternGuards, TemplateHaskell, Rank2Types #-}
+{-# LANGUAGE PatternGuards, TemplateHaskell, Rank2Types, LambdaCase #-}
 
 module Grid where
 import System.Random (randomRIO)
 import Control.Monad (when)
-import Control.Lens
+import Control.Lens hiding (index)
 import Control.Arrow ((&&&))
 import qualified Data.List as L
 import qualified Data.Vector as Vec
-import Data.Maybe (isJust, fromJust)
+import Data.Maybe (isJust, fromJust, isNothing)
 import qualified Text.Printf as P
 import Data.Vector ((!), (//))
 import qualified Data.Vec as V
@@ -15,12 +15,14 @@ import Data.Vec ((:.)(..))
 import qualified Graphics.Rendering.OpenGL.Raw as GL
 import qualified Gamgine.Gfx as Gfx
 import Gamgine.Gfx ((<<<))
-import Gamgine.Coroutine (Coroutine, runCoroutine)
 import Robot
 import qualified Robot as R
 
-
 type GridCoord = V.Vec2 Int
+
+mkCoord :: Int -> Int -> V.Vec2 Int
+mkCoord x y = x:.y:.()
+
 
 data GridField = GridField {
    _coord :: GridCoord,
@@ -74,51 +76,57 @@ randomAndFreeCoord grid = do
    x <- randomRIO (0, grid ^. width - 1)
    y <- randomRIO (0, grid ^. height - 1)
    let coord = x:.y:.()
-   case getGridField coord grid of
-        GridField _ Nothing -> return coord
-        _                   -> randomAndFreeCoord grid
+   if isFree coord grid
+      then return coord
+      else randomAndFreeCoord grid
 
 
-validCoord :: GridCoord -> Grid -> Bool
-validCoord (x:.y:.()) grid =
+isFree :: GridCoord -> Grid -> Bool
+isFree coord grid = grid ^. atCoord coord . robot . to isNothing
+
+
+isValid :: GridCoord -> Grid -> Bool
+isValid (x:.y:.()) grid =
    x >= 0 
       && x < grid ^. width
       && y >= 0
       && y < grid ^. height
 
 
-constrainCoord :: GridCoord -> Grid -> GridCoord
-constrainCoord (x:.y:.()) grid = (x':.y':.())
+addDir :: GridCoord -> Direction -> Grid -> Maybe GridCoord
+addDir (x:.y:.()) dir grid
+   | isValid newCoord grid && isFree newCoord grid = Just newCoord
+   | otherwise                                     = Nothing
    where
-      x' = min (grid ^. width - 1) (max 0 x)
-      y' = min (grid ^. height - 1) (max 0 y)
-
-
-addDir :: GridCoord -> Direction -> GridCoord
-(x:.y:.()) `addDir` dir =
-  case dir of
-       R.PlusY  -> x:.(y + 1):.()
-       R.MinusY -> x:.(y - 1):.()
-       R.MinusX -> (x - 1):.y:.()
-       R.PlusX  -> (x + 1):.y:.()
+      newCoord = case dir of
+                      R.PlusY  -> x:.(y + 1):.()
+                      R.MinusY -> x:.(y - 1):.()
+                      R.MinusX -> (x - 1):.y:.()
+                      R.PlusX  -> (x + 1):.y:.()
 
 
 toVec3d :: GridCoord -> V.Vec3 Double
 toVec3d (x:.y:.()) = (fromIntegral x :. fromIntegral y :. 0)
 
 
+index :: GridCoord -> Grid -> Int
+index (x:.y:.()) grid = (x * grid ^. width) + y
+
 getGridField :: GridCoord -> Grid -> GridField
-getGridField c@(x:.y:.()) grid
-   | validCoord c grid = grid ^. fields . atIndex (x * y)
-   | otherwise         = 
-      error $ P.printf "Invalid gridCoord=%s for gridWidth=%d and gridHeight=%d" (show c) (grid ^. width) (grid ^. height)
+getGridField coord@(x:.y:.()) grid
+   | isValid coord grid = grid ^. fields . atIndex (index coord grid)
+   | otherwise          = invalidCoordError coord grid 
 
 
 setGridField :: GridCoord -> Grid -> GridField -> Grid
-setGridField c@(x:.y:.()) grid field
-   | validCoord c grid = grid & fields . atIndex (x * y) .~ field
-   | otherwise =
-      error $ P.printf "Invalid gridCoord=%s for gridWidth=%d and gridHeight=%d" (show c) (grid ^. width) (grid ^. height)
+setGridField coord@(x:.y:.()) grid field
+   | isValid coord grid = grid & fields . atIndex (index coord grid) .~ field
+   | otherwise          = invalidCoordError coord grid
+
+
+invalidCoordError :: GridCoord -> Grid -> a
+invalidCoordError coord grid =
+   error $ P.printf "Invalid gridCoord=%s for gridWidth=%d and gridHeight=%d" (show coord) (grid ^. width) (grid ^. height)
 
 
 atCoord :: GridCoord -> Lens' Grid GridField
@@ -158,12 +166,24 @@ havingRobot :: Traversal' GridField GridField
 havingRobot = filtered (^. robot . to isJust)
 
 
-robotWithId :: Id -> Traversal' GridField GridField
-robotWithId id = filtered $ withId id
-   where
-      withId id (GridField _ (Just robot)) = id == robot ^. robotId
-      withId _                           _ = False
+withRobot :: RobotId -> Traversal' GridField GridField
+withRobot id = filtered (^. robot . to (\case {Just (Robot rid _ _) -> id == rid; _ -> False}))
 
 
-robots :: Grid -> [(GridCoord, Robot)]
-robots grid = grid ^.. fields . traversed . havingRobot . to ((^. coord) &&& (^. justRobot))
+robots :: Grid -> [Robot]
+robots grid = grid ^.. fields . traversed . havingRobot . justRobot
+
+
+coordOf :: RobotId -> Grid -> Maybe GridCoord
+coordOf id grid
+   | [coord] <- grid ^.. fields . traversed . withRobot id . coord = Just coord
+   | otherwise                                                     = Nothing
+
+
+moveRobotAlongDir :: RobotId -> Direction -> Grid -> Maybe Grid
+moveRobotAlongDir id dir grid = do
+   oldCoord <- coordOf id grid
+   rob      <- grid ^. atCoord oldCoord . robot
+   newCoord <- addDir oldCoord dir grid
+   return $ grid & atCoord oldCoord . robot .~ Nothing
+                 & atCoord newCoord . robot .~ Just rob

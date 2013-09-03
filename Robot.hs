@@ -2,10 +2,10 @@
 
 module Robot where
 import Control.Lens hiding (Action)
+import qualified Text.Printf as P
 import qualified Gamgine.Gfx as Gfx
-import Gamgine.Coroutine (Coroutine(..))
 
-type Id = Int
+type RobotId = Int
 
 data Direction = PlusX | MinusX | PlusY | MinusY deriving (Show, Eq, Enum)
 
@@ -18,26 +18,26 @@ data ActionResult = Moved Direction Bool
                   deriving (Show, Eq)
 
 data Robot = Robot {
-   _robotId :: Id,
+   _robotId :: RobotId,
    _color   :: Gfx.RGB,
-   _execute :: Coroutine ActionResult Action
+   _execute :: (ActionResult -> Action)
    }
 
 makeLenses ''Robot
 
 instance Show Robot where
-   show robot = "defaultRobot" ++ show (robot ^. robotId) ++ show (robot ^. color)
+   show robot = P.printf "defaultRobot %i %s" (robot ^. robotId) (show $ robot ^. color)
 
 instance Eq Robot where
    r1 == r2 = r1 ^. robotId == r2 ^. robotId
 
 
-defaultRobot :: Id -> Gfx.RGB -> Robot
-defaultRobot id color = Robot id color (Coroutine exec)
+defaultRobot :: RobotId -> Gfx.RGB -> Robot
+defaultRobot id color = Robot id color exec
    where
-      exec NoResult          = (Move PlusY, Coroutine exec)
-      exec (Moved dir True ) = (Move dir, Coroutine exec)
-      exec (Moved dir False) = (Move $ nextDir dir, Coroutine exec)
+      exec NoResult          = Move PlusY
+      exec (Moved dir True ) = Move dir
+      exec (Moved dir False) = Move $ nextDir dir
 
       nextDir PlusY  = PlusX
       nextDir PlusX  = MinusY
