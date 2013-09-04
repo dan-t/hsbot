@@ -33,12 +33,11 @@ mkHsBot gridWidth gridHeight = HsBot (mkGrid gridWidth gridHeight) []
 
 
 mkDefaultHsBot :: Int -> Int -> IO HsBot
-mkDefaultHsBot gridWidth gridHeight = 
-   placeRobotRandomly robot1 hsBot >>= placeRobotRandomly robot2
+mkDefaultHsBot gridWidth gridHeight =
+   ifoldlM addRobot (mkHsBot gridWidth gridHeight) colors
    where
-      hsBot  = mkHsBot gridWidth gridHeight
-      robot1 = defaultRobot 1 (1, 0, 0)
-      robot2 = defaultRobot 2 (0, 1, 0)
+      addRobot id hsBot color = placeRobotRandomly (defaultRobot id color) hsBot
+      colors = [(r, g, b) | r <- [1, 0, 0], g <- [0, 1, 0], b <- [0, 0, 1]]
 
 
 placeRobotRandomly :: Robot -> HsBot -> IO HsBot
