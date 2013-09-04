@@ -62,20 +62,14 @@ execRobots hsBot = apply (actions results) hsBot
 
 
 apply :: IdsWithActions -> HsBot -> HsBot
-apply actions hsBot = hsBot' & actionResults .~ results  
+apply actions hsBot = L.foldl' (flip applyAction) (hsBot & actionResults .~ []) actions
    where
-      (hsBot', results) = L.foldl' applyAct (hsBot, []) actions
-         where
-            applyAct (hsBot, res) act =
-               let (hsBot', res') = applyAction act hsBot
-                   in (hsBot', res' : res)
-
-
-applyAction :: IdWithAction -> HsBot -> (HsBot, IdWithResult)
-applyAction (id, NoAction) hsBot = (hsBot, (id, NoResult))
-applyAction (id, Move dir) hsBot
-   | Just grid' <- moveRobotAlongDir id dir (hsBot ^. grid) = (hsBot & grid .~ grid', (id, Moved dir True))
-   | otherwise                                              = (hsBot, (id, Moved dir False))
+      applyAction (id, NoAction) hsBot = hsBot
+      applyAction (id, Move dir) hsBot =
+         case moveRobotAlongDir id dir (hsBot ^. grid) of
+              Just grid' -> hsBot & grid .~ grid'
+                                  & actionResults %~ ((id, Moved dir True) :)
+              _          -> hsBot & actionResults %~ ((id, Moved dir False) :)
 
 
 actions :: RobotsWithResults -> IdsWithActions
