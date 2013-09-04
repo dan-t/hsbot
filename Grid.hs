@@ -51,7 +51,7 @@ mkGrid :: Int -> Int -> Grid
 mkGrid width height = Grid width height mkFields
    where
       mkFields = Vec.generate (width * height) $ \i ->
-         let (x, y) = i `quotRem` width
+         let (x, y) = i `quotRem` height
              in GridField (x:.y:.()) Nothing
 
 
@@ -110,7 +110,7 @@ toVec3d (x:.y:.()) = (fromIntegral x :. fromIntegral y :. 0)
 
 
 index :: GridCoord -> Grid -> Int
-index (x:.y:.()) grid = (x * grid ^. width) + y
+index (x:.y:.()) grid = (x * grid ^. height) + y
 
 getGridField :: GridCoord -> Grid -> GridField
 getGridField coord@(x:.y:.()) grid
