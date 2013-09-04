@@ -11,6 +11,7 @@ import qualified Gamgine.Gfx as GFX
 import qualified Gamgine.Math.Vect as V
 import qualified Gamgine.Math.Matrix as M
 import qualified Gamgine.Math.Utils as MU
+import qualified Gamgine.Engine as EG
 import Gamgine.Math.Vect
 import Gamgine.Gfx ((<<<))
 import qualified Grid as G
@@ -25,19 +26,24 @@ dGridHeight = fromIntegral gridHeight
 
 borderWidth = (max dGridWidth dGridHeight) / 8
 
+ticksPerSecond = 4
+maxFrameSkip   = 10
+updateLoop     = EG.mkUpdateLoop ticksPerSecond maxFrameSkip executeRobots
+
 
 main :: IO ()
 main = do
    initGLFW
    hsBot <- mkDefaultHsBot gridWidth gridHeight
-   ST.evalStateT appLoop hsBot
+   time  <- GLFW.getTime
+   ST.evalStateT (appLoop time) hsBot
 
 
-appLoop :: HsBotST ()
-appLoop = do
-   executeRobots
+appLoop :: Double -> HsBotST ()
+appLoop nextFrame = do
+   (nextFrame', _) <- updateLoop nextFrame
    render
-   appLoop
+   appLoop nextFrame'
 
 
 render :: HsBotST ()
