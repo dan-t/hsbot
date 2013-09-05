@@ -65,9 +65,9 @@ render = do
    renderHsBot
    swapBuffers
    where
-      swapBuffers = ST.liftIO GLFW.swapBuffers
+      swapBuffers = io GLFW.swapBuffers
 
-      clearScreen = ST.liftIO $ do
+      clearScreen = io $ do
          GL.glClearColor 0 0 0 0
          GL.glClear (fromIntegral GL.gl_COLOR_BUFFER_BIT)
 
