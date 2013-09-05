@@ -4,6 +4,7 @@ import System.Exit (exitSuccess)
 import qualified Debug.Trace as T
 import Control.Applicative ((<$>), (<*>))
 import qualified Control.Monad.State as ST
+import Control.Monad (when, void)
 import qualified Data.Vector as Vec
 import qualified Graphics.UI.GLFW as GLFW
 import qualified Graphics.Rendering.OpenGL.Raw as GL
@@ -14,8 +15,7 @@ import qualified Gamgine.Math.Utils as MU
 import qualified Gamgine.Engine as EG
 import Gamgine.Math.Vect
 import Gamgine.Gfx ((<<<))
-import qualified Grid as G
-import qualified Robot as R
+import Grid
 import HsBot
 
 gridWidth   = 10 :: Int
@@ -30,6 +30,8 @@ ticksPerSecond = 4
 maxFrameSkip   = 10
 updateLoop     = EG.mkUpdateLoop ticksPerSecond maxFrameSkip executeRobots
 
+io = ST.liftIO
+
 
 main :: IO ()
 main = do
@@ -42,6 +44,17 @@ main = do
 appLoop :: Double -> HsBotST ()
 appLoop nextFrame = do
    (nextFrame', _) <- updateLoop nextFrame
+
+   pressed0 <- io $ GLFW.mouseButtonIsPressed GLFW.MouseButton0
+   when pressed0 $ do
+      coord <- io mousePosInGridCoords
+      placeBlock coord
+
+   pressed1 <- io $ GLFW.mouseButtonIsPressed GLFW.MouseButton1
+   when pressed1 $ do
+      coord <- io mousePosInGridCoords
+      removeBlock coord
+
    render
    appLoop nextFrame'
 
@@ -88,6 +101,22 @@ initGLFW = do
          GL.glTranslatef <<< gridTrans
          
       quit = GLFW.closeWindow >> GLFW.terminate >> exitSuccess
+
+
+mousePosInGridCoords :: IO GridCoord
+mousePosInGridCoords = do
+   mworld    <- mousePosInWorldCoords
+   gridTrans <- gridTranslation
+   let (x:.y:._) = mworld - gridTrans
+   return (floor x:.floor y:.())
+
+
+mousePosInWorldCoords :: IO V.Vect
+mousePosInWorldCoords = do
+   winDims  <- GLFW.getWindowDimensions
+   mousePos <- GLFW.getMousePosition
+   let winToWorldMtx = M.mkWinToWorldMatrix winDims (frustum winDims)
+   return $ V.setElem 2 0 $ M.winToWorld winToWorldMtx mousePos
 
 
 gridTranslation :: IO V.Vect

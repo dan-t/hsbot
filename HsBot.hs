@@ -3,9 +3,12 @@
 module HsBot where
 import Control.Lens hiding (Action)
 import Control.Applicative ((<$>), (<*>))
+import Control.Arrow ((&&&))
 import qualified Text.Printf as P
 import qualified Control.Monad.State as ST
+import Control.Monad (when)
 import qualified Data.List as L
+import Data.Maybe (isJust)
 import Grid
 import Robot
 import qualified Robot as R
@@ -48,6 +51,20 @@ placeRobotRandomly robot hsBot = do
 
 placeRobot :: GridCoord -> Robot -> HsBot -> HsBot
 placeRobot coord rob hsBot = hsBot & grid . atCoord coord . entity .~ RobotEntity rob
+
+
+placeBlock :: GridCoord -> HsBotST ()
+placeBlock coord = do
+   valid <- (isValidAndFree coord) <$> use grid
+   when valid $ grid . atCoord coord . entity .= BlockEntity
+
+
+removeBlock :: GridCoord -> HsBotST ()
+removeBlock coord = do
+   valid <- (isValid coord) <$> use grid
+   when valid $ do
+      hasBlock <- isJust <$> (preuse $ grid . atCoord coord . entity . _BlockEntity)
+      when hasBlock $ grid . atCoord coord . entity .= NoEntity
 
 
 executeRobots :: HsBotST ()

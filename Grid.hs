@@ -96,10 +96,14 @@ isValid (x:.y:.()) grid =
       && y < grid ^. height
 
 
+isValidAndFree :: GridCoord -> Grid -> Bool
+isValidAndFree coord grid = isValid coord grid && isFree coord grid
+
+
 addDir :: GridCoord -> Direction -> Grid -> Maybe GridCoord
 addDir (x:.y:.()) dir grid
-   | isValid newCoord grid && isFree newCoord grid = Just newCoord
-   | otherwise                                     = Nothing
+   | isValidAndFree newCoord grid = Just newCoord
+   | otherwise                    = Nothing
    where
       newCoord = case dir of
                       R.PlusY  -> x:.(y + 1):.()
