@@ -58,22 +58,6 @@ mkGrid width height = Grid width height mkFields
              in GridField (x:.y:.()) NoEntity
 
 
-forM_ :: Grid -> (GridField -> IO ()) -> IO ()
-forM_ grid = Vec.forM_ $ grid ^. fields
-
-
-foldl' :: (a -> GridField -> a) -> a -> Grid -> a
-foldl' f a grid = Vec.foldl' f a $ grid ^. fields
-
-
-find :: (GridField -> Bool) -> Grid -> [GridField]
-find f grid = foldl' g [] grid
-   where
-      g fields field
-         | f field   = field : fields
-         | otherwise = fields
-
-
 randomAndFreeCoord :: Grid -> IO GridCoord
 randomAndFreeCoord grid = do
    x <- randomRIO (0, grid ^. width - 1)
@@ -145,7 +129,7 @@ atIndex i = lens (! i) (\gfs gf -> gfs // [(i, gf)])
 
 
 renderGrid :: Grid -> IO ()
-renderGrid grid = forM_ grid renderGridField
+renderGrid grid = Vec.forM_ (grid ^. fields) renderGridField
 
 
 renderGridField :: GridField -> IO ()
