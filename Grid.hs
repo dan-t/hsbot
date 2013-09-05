@@ -24,16 +24,19 @@ mkCoord :: Int -> Int -> V.Vec2 Int
 mkCoord x y = x:.y:.()
 
 
+data Entity = RobotEntity Robot
+            | BlockEntity
+            | NoEntity deriving (Show, Eq)
+
+makePrisms ''Entity
+
+
 data GridField = GridField {
-   _coord :: GridCoord,
-   _robot :: Maybe Robot
+   _coord  :: GridCoord,
+   _entity :: Entity
    } deriving (Show, Eq)
 
 makeLenses ''GridField
-
-
-justRobot :: Lens' GridField Robot
-justRobot = lens (^. robot . to fromJust) (\gf r -> gf & robot .~ Just r)
 
 
 type GridFields = Vec.Vector GridField
@@ -52,7 +55,7 @@ mkGrid width height = Grid width height mkFields
    where
       mkFields = Vec.generate (width * height) $ \i ->
          let (x, y) = i `quotRem` height
-             in GridField (x:.y:.()) Nothing
+             in GridField (x:.y:.()) NoEntity
 
 
 forM_ :: Grid -> (GridField -> IO ()) -> IO ()
@@ -82,7 +85,7 @@ randomAndFreeCoord grid = do
 
 
 isFree :: GridCoord -> Grid -> Bool
-isFree coord grid = grid ^. atCoord coord . robot . to isNothing
+isFree coord grid = isJust $ grid ^? atCoord coord . entity . _NoEntity
 
 
 isValid :: GridCoord -> Grid -> Bool
@@ -142,16 +145,17 @@ renderGrid grid = forM_ grid renderGridField
 
 
 renderGridField :: GridField -> IO ()
-renderGridField (GridField coord robot) = do
+renderGridField (GridField coord entity) = do
    Gfx.withPolyMode GL.gl_LINE $ do
       GL.glColor3f <<< ((1,1,1) :: Gfx.RGB)
       let minCoord = toVec3d coord
           maxCoord = minCoord + (1:.1:.0:.())
       Gfx.drawQuad minCoord maxCoord
 
-   case robot of
-        Just r -> renderRobot coord r
-        _      -> return ()
+   case entity of
+        RobotEntity r -> renderRobot coord r
+        BlockEntity   -> renderBlock coord
+        _             -> return ()
 
 
 renderRobot :: GridCoord -> Robot -> IO ()
@@ -162,16 +166,22 @@ renderRobot coord robot = do
    Gfx.drawQuad minCoord maxCoord
 
 
-havingRobot :: Traversal' GridField GridField
-havingRobot = filtered (^. robot . to isJust)
+renderBlock :: GridCoord -> IO ()
+renderBlock coord = do
+   GL.glColor3f <<< Gfx.rgb 1 1 1
+   let minCoord = toVec3d coord
+       maxCoord = minCoord + (1:.1:.0:.())
+   Gfx.drawQuad minCoord maxCoord
 
 
 withRobot :: RobotId -> Traversal' GridField GridField
-withRobot id = filtered (^. robot . to (\case {Just (Robot rid _ _) -> id == rid; _ -> False}))
+withRobot id = filtered $ \field -> case field ^? entity . _RobotEntity of
+                                         Just robot -> id == robot ^. robotId
+                                         _          -> False
 
 
 robots :: Grid -> [Robot]
-robots grid = grid ^.. fields . traversed . havingRobot . justRobot
+robots grid = grid ^.. fields . traversed . entity . _RobotEntity
 
 
 coordOf :: RobotId -> Grid -> Maybe GridCoord
@@ -183,7 +193,7 @@ coordOf id grid
 moveRobotAlongDir :: RobotId -> Direction -> Grid -> Maybe Grid
 moveRobotAlongDir id dir grid = do
    oldCoord <- coordOf id grid
-   rob      <- grid ^. atCoord oldCoord . robot
+   rob      <- grid ^? atCoord oldCoord . entity . _RobotEntity
    newCoord <- addDir oldCoord dir grid
-   return $ grid & atCoord oldCoord . robot .~ Nothing
-                 & atCoord newCoord . robot .~ Just rob
+   return $ grid & atCoord oldCoord . entity .~ NoEntity
+                 & atCoord newCoord . entity .~ RobotEntity rob

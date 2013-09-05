@@ -47,7 +47,7 @@ placeRobotRandomly robot hsBot = do
 
 
 placeRobot :: GridCoord -> Robot -> HsBot -> HsBot
-placeRobot coord rob hsBot = hsBot & grid . atCoord coord . robot .~ Just rob
+placeRobot coord rob hsBot = hsBot & grid . atCoord coord . entity .~ RobotEntity rob
 
 
 executeRobots :: HsBotST ()
