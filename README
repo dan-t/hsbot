@@ -14,3 +14,8 @@ Make and Install:
 
 Usage:
    hsbot
+
+
+Control:
+   left mouse button pressed  -> place a block
+   right mouse button pressed -> remove a block
