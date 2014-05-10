@@ -7,14 +7,9 @@ Robots with "superior" AI moving in a grid
 Make and Install
 ----------------
 
-    cabal install cabal-dev
- 
-    git clone https://github.com/dan-t/Gamgine
     git clone https://github.com/dan-t/hsbot
- 
     cd hsbot
-    cabal-dev add-source ../Gamgine
-    cabal-dev install
+    cabal install
 
 
 Usage
