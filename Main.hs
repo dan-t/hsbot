@@ -5,6 +5,8 @@ import qualified Debug.Trace as T
 import Control.Applicative ((<$>), (<*>))
 import qualified Control.Monad.State as ST
 import Control.Monad (when, void)
+import Control.Arrow ((&&&))
+import Control.Lens
 import qualified Data.Vector as Vec
 import qualified Graphics.UI.GLFW as GLFW
 import qualified Graphics.Rendering.OpenGL.Raw as GL
@@ -35,93 +37,92 @@ io = ST.liftIO
 
 main :: IO ()
 main = do
-   initGLFW
-   hsBot <- mkDefaultHsBot gridWidth gridHeight
-   time  <- GLFW.getTime
-   ST.evalStateT (appLoop time) hsBot
+   GLFW.init
+   GLFW.windowHint $ GLFW.WindowHint'Resizable True
+   GLFW.swapInterval 1
+   Just win <- GLFW.createWindow 800 800 "" Nothing Nothing
+   initCallbacks win
+   GLFW.makeContextCurrent (Just win)
+
+   hsBot     <- mkDefaultHsBot gridWidth gridHeight
+   Just time <- GLFW.getTime
+   ST.evalStateT (appLoop win time) hsBot
 
 
-appLoop :: Double -> HsBotST ()
-appLoop nextFrame = do
+appLoop :: GLFW.Window -> Double -> HsBotST ()
+appLoop win nextFrame = do
+   io GLFW.pollEvents
    (nextFrame', _) <- updateLoop nextFrame
 
-   pressed0 <- io $ GLFW.mouseButtonIsPressed GLFW.MouseButton0
-   when pressed0 $ do
-      coord <- io mousePosInGridCoords
+   pressed1 <- io $ isButtonPressed win GLFW.MouseButton'1
+   when pressed1 $ do
+      coord <- io (mousePosInGridCoords win)
       placeBlock coord
 
-   pressed1 <- io $ GLFW.mouseButtonIsPressed GLFW.MouseButton1
-   when pressed1 $ do
-      coord <- io mousePosInGridCoords
+   pressed2 <- io $ isButtonPressed win GLFW.MouseButton'2
+   when pressed2 $ do
+      coord <- io (mousePosInGridCoords win)
       removeBlock coord
 
-   render
-   appLoop nextFrame'
+   render win
+   appLoop win nextFrame'
+   where
+      isButtonPressed win button = (== GLFW.MouseButtonState'Pressed) <$> GLFW.getMouseButton win button
 
 
-render :: HsBotST ()
-render = do
+render :: GLFW.Window -> HsBotST ()
+render win = do
    clearScreen
    renderHsBot
    swapBuffers
    where
-      swapBuffers = io GLFW.swapBuffers
+      swapBuffers = io (GLFW.swapBuffers win)
 
       clearScreen = io $ do
          GL.glClearColor 0 0 0 0
          GL.glClear (fromIntegral GL.gl_COLOR_BUFFER_BIT)
 
 
-initGLFW :: IO ()
-initGLFW = do
-   GLFW.initialize
-   GLFW.openWindow GLFW.defaultDisplayOptions {
-      GLFW.displayOptions_width             = 800,
-      GLFW.displayOptions_height            = 800,
-      GLFW.displayOptions_windowIsResizable = True
-      }
-
-   GLFW.setWindowBufferSwapInterval 1
-   GLFW.setWindowSizeCallback resize
-   GLFW.setWindowCloseCallback quit
-   GLFW.setMousePositionCallback $ \x y -> return ()
-
+initCallbacks :: GLFW.Window -> IO ()
+initCallbacks win = do
+   GLFW.setWindowSizeCallback win (Just resize)
+   GLFW.setWindowCloseCallback win (Just quit)
    where
-      resize width height = do
+      resize win width height = do
          let M.Frustum {M.right = right, M.top = top} = frustum (width, height)
 
 	 GL.glViewport 0 0 (fromIntegral width) (fromIntegral height)
 	 GL.glMatrixMode GL.gl_PROJECTION
 	 GL.glLoadIdentity
          GL.glOrtho 0 (GFX.floatToFloat right) 0 (GFX.floatToFloat top) (-1) 1
-         
+
          GL.glMatrixMode GL.gl_MODELVIEW
          GL.glLoadIdentity
-         gridTrans <- gridTranslation
+         gridTrans <- gridTranslation win
          GL.glTranslatef <<< gridTrans
-         
-      quit = GLFW.closeWindow >> GLFW.terminate >> exitSuccess
+
+      quit win = GLFW.destroyWindow win >> GLFW.terminate >> exitSuccess
 
 
-mousePosInGridCoords :: IO GridCoord
-mousePosInGridCoords = do
-   mworld    <- mousePosInWorldCoords
-   gridTrans <- gridTranslation
+mousePosInGridCoords :: GLFW.Window -> IO GridCoord
+mousePosInGridCoords win = do
+   mworld    <- mousePosInWorldCoords win
+   gridTrans <- gridTranslation win
    let (x:.y:._) = mworld - gridTrans
    return (floor x:.floor y:.())
 
 
-mousePosInWorldCoords :: IO V.Vect
-mousePosInWorldCoords = do
-   winDims  <- GLFW.getWindowDimensions
-   mousePos <- GLFW.getMousePosition
+mousePosInWorldCoords :: GLFW.Window -> IO V.Vect
+mousePosInWorldCoords win = do
+   winDims  <- GLFW.getWindowSize win
+   mousePos <- GLFW.getCursorPos win
    let winToWorldMtx = M.mkWinToWorldMatrix winDims (frustum winDims)
-   return $ V.setElem 2 0 $ M.winToWorld winToWorldMtx mousePos
+   return $ V.setElem 2 0 $ M.winToWorld winToWorldMtx (mousePos & each %~ floor)
 
 
-gridTranslation :: IO V.Vect
-gridTranslation = do
-   M.Frustum {M.right = r, M.top = t} <- frustum <$> GLFW.getWindowDimensions
+gridTranslation :: GLFW.Window -> IO V.Vect
+gridTranslation win = do
+   M.Frustum {M.right = r, M.top = t} <- frustum <$> GLFW.getWindowSize win
    let transX = (r - dGridWidth) / 2
        transY = (t - dGridHeight) / 2
    return (transX:.transY:.0)
