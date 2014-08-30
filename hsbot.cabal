@@ -22,7 +22,7 @@ executable hsbot
         Vec >=1.0.1 && <1.1,
         GLFW-b >=1.0 && <1.5,
         OpenGLRaw >=1.4.0.0 && <1.6,
-        Gamgine >=0.2 && <0.4,
+        Gamgine ==0.3.*,
         lens >=4.1.2 && <4.5,
         random >=1.0.1.1 && <1.1,
         mtl >=2.1.3.1 && <2.2
